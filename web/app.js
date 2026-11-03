@@ -245,7 +245,7 @@ async function sendMessage(content, existingRequestID = null) {
     const reply = await api("/api/chat", { method: "POST", body: { sessionId: sessionID, content, requestId: requestID }, signal: controller.signal });
     if (pending !== task || controller.signal.aborted) return;
     userMessage.status = "complete";
-    current.messages.push(reply);
+    current.messages.splice(current.messages.indexOf(userMessage) + 1, 0, reply);
     pending = null;
     renderMessages();
     if (state.settings.voice) speakText(reply.content).catch(toast);
