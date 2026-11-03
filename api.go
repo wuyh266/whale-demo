@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
@@ -290,7 +291,15 @@ func (a *App) chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "这段对话已被删除")
 		return
 	}
-	reply, err := a.reply(r.Context(), snapshot, *session, input.Content)
+	// 重试时，只使用截至原始用户消息的聊天历史。
+	contextSession := *session
+	for i, message := range contextSession.Messages {
+		if message.Role == "user" && message.RequestID == input.RequestID {
+			contextSession.Messages = contextSession.Messages[:i+1]
+			break
+		}
+	}
+	reply, err := a.reply(r.Context(), snapshot, contextSession, input.Content)
 	status := "complete"
 	if err != nil {
 		status = "failed"
@@ -314,10 +323,13 @@ func (a *App) chat(w http.ResponseWriter, r *http.Request) {
 		for i := range current.Messages {
 			if current.Messages[i].RequestID == input.RequestID && current.Messages[i].Role == "user" {
 				current.Messages[i].Status = status
+
+				// 成功的回答紧跟对应问题，失败或取消时不插入回答。
+				if status == "complete" {
+					current.Messages = slices.Insert(current.Messages, i+1, response)
+				}
+				break
 			}
-		}
-		if status == "complete" {
-			current.Messages = append(current.Messages, response)
 		}
 		current.UpdatedAt = now()
 		return nil
