@@ -1,4 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'stop-sovits.ps1')
 $pidFile = Join-Path $PSScriptRoot 'data\demo.pid'
 if (-not (Test-Path -LiteralPath $pidFile)) { Write-Host '没有找到由启动脚本运行的鲸伴服务。'; exit 0 }
 $demoProcessId = [int](Get-Content -LiteralPath $pidFile -Raw).Trim()

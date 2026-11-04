@@ -29,3 +29,19 @@ dialog{width:min(475px,calc(100% - 32px));border:1px solid #e1ebf3;border-radius
 @media(max-width:900px){.whale-character.character-sprite{width:270px}.character-stage{min-height:260px}}
 @media(max-width:560px){.whale-character.character-sprite{width:250px}.character-stage{min-height:235px}.character-caption small{font-size:7px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+.companion-shortcut{margin-top:12px;font-size:11px}
+.companion-picker{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.companion-picker select{flex:1;min-width:140px;margin:0}
+.companion-picker button{white-space:nowrap}
+.companion-settings>p,.voice-preview>p{font-size:12px;line-height:1.8;color:var(--muted,#78909f)}
+.companion-settings .companion-summary{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f9fc;padding:12px 15px;border-radius:10px;color:#48677d;max-height:150px;overflow:auto}
+.character-caption>small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.character-caption{max-width:100%;min-width:0}
+.character-status{max-width:100%}
+.character-status strong{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-header>div{min-width:0;overflow-wrap:anywhere}
+#companion-dialog{max-height:90dvh;overflow:auto;width:min(540px,calc(100vw - 30px))}
+#companion-dialog textarea{min-height:66px}
+.voice-preview textarea{width:100%;resize:vertical;min-height:75px;line-height:1.7;padding:12px;border:1px solid #dce7ef;border-radius:10px;font:inherit;font-size:13px;color:#36556e;background:#fbfdff}
+#voice-preview-status{font-size:12px;color:#63859d}
+@media(max-width:560px){.companion-picker{gap:8px}.companion-picker select{flex-basis:100%}.companion-picker button{font-size:11px}.companion-shortcut{font-size:10px;margin-top:8px}.companion-settings>p,.voice-preview>p{font-size:11px}}

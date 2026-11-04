@@ -1,46 +1,29 @@
-# 鲸伴 Demo 素材说明
+# 素材说明
 
-## 当前使用的鲸鱼娘表情图 whale-girl-sheet.png
+## 角色图片
 
-来自用户在本次对话中提供的 4 × 4 表情图，780 × 761 像素。已原样复制，未生成重绘、未抠图、未修改源像素。界面通过 CSS 视窗显示相应表情，隐藏下方文字；使用 multiply 混合模式融合原图白色背景。
+| 文件 | 来源与用途 |
+| --- | --- |
+| `whale-girl-sheet.png` | 用户提供的 4 × 4 表情图，780 × 761 像素；用于大肥鱼的表情、头像和应用标志，网页通过 CSS 视窗显示相应表情。 |
+| `anon.png` | 用户提供的千早爱音参考图，942 × 1670 像素；用于头像和参考图预览。 |
+| `anon-poster.png` | 用户提供的角色海报；保留透明通道，叠放在爱音主题背景上。 |
 
-角色待机和聆听使用撒娇表情，思考使用省略号表情，回复使用开心表情，播放音乐使用欢呼表情。点击角色还可体验爱心、害羞、冲鸭和感谢。聊天头像和应用标志使用同一张原图。
+上述图片保留用户提供文件的像素内容。自定义伴侣上传的图片保存在 `data/uploads/`，不属于内置素材。
 
-旧的 whale.png 是早期生成的备用素材，目前界面不再使用。
+README 使用 `anon.png` 展示角色参考图；`docs/images/whale-demo.png` 是用户提供的实际运行截图，仅供项目文档展示。
 
-## 原创小鲸鱼 `whale.png`
+## 音乐
 
-- 生成方式：Codex 内置 `image_gen` 工具，默认内置模式；未使用 CLI 或外部图片库。
-- 这是为本项目生成的原创角色，未输入其他角色图片作为参考。
-- PNG 包含原生透明通道；仅从默认生成目录复制到本目录，未对图片做任何后处理。
-- 已目视检查：单只蓝色毛绒质感小鲸，白色肚皮、黑色亮眼睛、微笑、淡粉脸颊；完整身体，背景透明，无文字与道具。
-- 生成时请求 1024×1024；实际工具返回尺寸以 PNG 自身元数据为准，前端按布局缩放显示。
+`tide.wav`、`moon.wav`、`cloud.wav` 是为本项目编写的三段原创合成元音哼唱，每段 36 秒，格式为 24 kHz、双声道、16-bit PCM WAV。它们采用程序合成的旋律与伴奏，有电子音色；不是角色录制的歌声，也不是实时生成的歌曲。
 
-生成 Prompt：
+## 语音参考
 
-```text
-Use case: stylized-concept
-Asset type: transparent PNG mascot for an adult-friendly companion chat application
-Primary request: Create one original charming blue baby whale companion character, rounded and cuddly, facing the viewer in a slight three-quarter view. Plump blue body, pale cream-white belly, small flippers, little curved tail visible, glossy black eyes, gentle closed smile, very subtle light pink cheeks. Friendly calm personality, premium polished 3D clay/plush illustration, soft tactile velvety material, tasteful and appealing to adults.
-Scene/backdrop: genuinely transparent background, no environment.
-Composition/framing: 1024 x 1024 square, full body centered, body occupies about 65% of canvas, transparent breathing room all around, no crop.
-Lighting/mood: soft studio lighting, calm and comforting; subtle shading on the character only.
-Color palette: periwinkle ocean blue, white belly, restrained blush.
-Constraints: one character only, original design, no text, no letters, no logos, no watermark, no accessories, no props, no floor or drop-shadow plane. Preserve true transparency outside the character.
-```
+以下日语参考音频由用户提供，推理配置与对应原文保存在 `config/sovits.json`：
 
-## 三首原创合成元音哼唱
+| 文件 | 音色 |
+| --- | --- |
+| `config/reference/anon.wav` | 千早爱音 |
+| `config/reference/soyo.wav` | 长崎素世 |
+| `config/reference/sakiko-white.wav` | 客服小祥 |
 
-| 文件 | 建议显示名称 | 时长 | 音频格式 |
-| --- | --- | --- | --- |
-| `tide.wav` | 潮汐来信 | 36 秒 | 24 kHz、双声道、16-bit PCM WAV |
-| `moon.wav` | 月亮晚安 | 36 秒 | 24 kHz、双声道、16-bit PCM WAV |
-| `cloud.wav` | 云朵散步 | 36 秒 | 24 kHz、双声道、16-bit PCM WAV |
-
-这些是**程序合成的元音哼唱**，用于演示点歌、播放、进度、切歌和角色演唱状态。它们有原创的音高序列、节拍、元音共振峰、呼吸包络、颤音及轻柔和弦伴奏；不是纯单频提示音，也不是朗读歌词。
-
-它们不是录音、不是实时 AI 创作歌曲，也不是专业歌声合成模型的输出。合成声音仍有明显电子音色，不能视作最终角色的自然人声。正式角色歌声与聊天声音的一致性，需要接入专业歌声模型或合规录制素材后替换。
-
-旋律与合成脚本均为本次 Demo 编写，不使用现有歌曲、歌词或真人声音克隆。可通过 `tools/generate_audio.py` 重新生成，依赖 NumPy；随机种子固定。三首曲目均已验证文件可解码、持续时间 36 秒、波形非空且未削波。
-
-本目录不包含任何 API 密钥。语音识别、聊天模型、语音合成的运行能力由主程序按实际配置提供，这些文件不表示已接入任何在线歌声服务。
+三段音频均为 32 kHz、单声道 PCM16 WAV。本说明仅记录来源和用途，不代表角色图片、参考音频或模型权重的分发授权。

@@ -21,11 +21,21 @@ type Config struct {
 	ASRBase, ASRKey, ASRModel    string
 	TTSBase, TTSKey, TTSModel    string
 	TTSVoice                     string
+	TTSProvider                  string
+	GPTSoVITSBase                string
+	GPTSoVITSProfile             SoVITSProfile
+	TTSTimeout                   time.Duration
 }
 
 func (c Config) liveChat() bool  { return c.ChatKey != "" && c.ChatBase != "" && c.ChatModel != "" }
 func (c Config) serverASR() bool { return c.ASRKey != "" && c.ASRBase != "" && c.ASRModel != "" }
 func (c Config) serverTTS() bool {
+	if c.ttsProvider() == "gpt-sovits" {
+		return c.GPTSoVITSBase != ""
+	}
+	if c.ttsProvider() != "openai" {
+		return false
+	}
 	return c.TTSKey != "" && c.TTSBase != "" && c.TTSModel != "" && c.TTSVoice != ""
 }
 
@@ -75,6 +85,9 @@ func main() {
 		ASRBase: env("ASR_API_BASE", ""), ASRKey: env("ASR_API_KEY", ""), ASRModel: env("ASR_MODEL", ""),
 		TTSBase: env("TTS_API_BASE", ""), TTSKey: env("TTS_API_KEY", ""), TTSModel: env("TTS_MODEL", ""), TTSVoice: env("TTS_VOICE", ""),
 	}
+	if err := configureTTS(&cfg); err != nil {
+		log.Fatal(err)
+	}
 	store, err := openStore(*dataDir)
 	if err != nil {
 		log.Fatal(err)
@@ -86,9 +99,13 @@ func main() {
 	}
 	mux := app.routes()
 	mux.Handle("GET /", http.FileServer(http.FS(root)))
+	writeTimeout := 100 * time.Second
+	if cfg.speechTimeout()+15*time.Second > writeTimeout {
+		writeTimeout = cfg.speechTimeout() + 15*time.Second
+	}
 	server := &http.Server{
 		Addr: *addr, Handler: security(mux), ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 20 * time.Second, WriteTimeout: 100 * time.Second, IdleTimeout: 90 * time.Second,
+		ReadTimeout: 20 * time.Second, WriteTimeout: writeTimeout, IdleTimeout: 90 * time.Second,
 	}
 	mode := "本地演示回复"
 	if cfg.liveChat() {
