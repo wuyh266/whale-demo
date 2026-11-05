@@ -1,0 +1,45 @@
+{
+  "source_dir": "backend/gpt-sovits",
+  "python": "runtime/python.exe",
+  "gpt_weights": "GPT_weights_v2ProPlus/MyGO_千早爱音_v2pp.ckpt",
+  "sovits_weights": "SoVITS_weights_v2ProPlus/MyGO_千早爱音_v2pp.pth",
+  "version": "v2ProPlus",
+  "device": "cuda",
+  "is_half": true,
+  "ref_audio_path": "config/reference/anon.wav",
+  "prompt_text": "家の都合で変な時期の入学ですが、よかったら仲良くしてください。よろしくお願いします！",
+  "prompt_lang": "ja",
+  "text_lang": "zh",
+  "text_split_method": "cut5",
+  "speed_factor": 1.0,
+  "voices": {
+    "anon": {
+      "gpt_weights": "GPT_weights_v2ProPlus/MyGO_千早爱音_v2pp.ckpt",
+      "sovits_weights": "SoVITS_weights_v2ProPlus/MyGO_千早爱音_v2pp.pth",
+      "ref_audio_path": "config/reference/anon.wav",
+      "prompt_text": "家の都合で変な時期の入学ですが、よかったら仲良くしてください。よろしくお願いします！",
+      "prompt_lang": "ja",
+      "version": "v2ProPlus",
+      "name": "千早爱音"
+    },
+    "soyo": {
+      "name": "长崎素世",
+      "gpt_weights": "GPT_weights_v2ProPlus/MyGO_长崎素世_夹_v2pp.ckpt",
+      "sovits_weights": "SoVITS_weights_v2ProPlus/MyGO_长崎素世_夹_v2pp.pth",
+      "ref_audio_path": "config/reference/soyo.wav",
+      "prompt_text": "『春日影』も大分仕上がってきたね～。この調子なら、ライブでもうまく歌えそうかな？",
+      "prompt_lang": "ja",
+      "version": "v2ProPlus"
+    },
+    "sakiko_white": {
+      "name": "客服小祥",
+      "gpt_weights": "GPT_weights_v2ProPlus/Mujica_豊川祥子_白_v2pp.ckpt",
+      "sovits_weights": "SoVITS_weights_v2ProPlus/Mujica_豊川祥子_白_v2pp.pth",
+      "ref_audio_path": "config/reference/sakiko-white.wav",
+      "prompt_text": "あなたと空を見上げるのは、いつも夏でしたわね",
+      "prompt_lang": "ja",
+      "version": "v2ProPlus"
+    }
+  },
+  "default_voice": "sakiko_white"
+}

@@ -3,7 +3,7 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const icon = (name) => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-let state = { settings: { nickname: "", voice: false, volume: 70 }, sessions: [], memories: [] };
+let state = { settings: { nickname: "", voice: false, volume: 70, speechLanguage: "zh" }, sessions: [], memories: [], companions: [], activeCompanionId: "" };
 let config = null;
 let currentSessionID = "";
 let currentView = "home";
@@ -20,6 +20,10 @@ let confirmResolver = null;
 let touchedUntil = 0;
 let touchIndex = 0;
 let captureRequest = 0;
+let companionImageURL = "";
+let companionImageRequest = null;
+let companionImageGeneration = 0;
+let savingCompanionVoice = false;
 const expressions = {
   idle: [1, 0], listening: [1, 0], thinking: [3, 2],
   speaking: [0, 0], singing: [2, 2], love: [3, 1],
@@ -37,6 +41,7 @@ function setExpression(name) {
 const songAudio = $("#song-audio");
 const replyAudio = $("#reply-audio");
 const speechURLs = new Map();
+let transientSpeechURL = null;
 
 function toast(message) {
   const el = $("#toast");
@@ -85,6 +90,88 @@ function iconButton(name, label, action, className = "icon-button") {
 }
 
 function session() { return state.sessions.find((item) => item.id === currentSessionID); }
+function currentCompanion() { return state.companions.find((item) => item.id === (session()?.companionId || state.activeCompanionId)) || state.companions[0] || config?.character || { name: "大肥鱼", greeting: "嗨，我是大肥鱼。今天想聊些什么？" }; }
+function portraitSource(companion = currentCompanion()) { return companion.imageUrl && companion.imageUrl !== "/assets/whale-girl-sheet.png" ? companion.imageUrl : ""; }
+const localVoiceIDs = ["anon", "soyo", "sakiko_white"];
+function localVoiceOptions() {
+  const names = { anon: "千早爱音", soyo: "长崎素世", sakiko_white: "客服小祥" };
+  const catalog = Array.isArray(config?.voices) ? config.voices : [];
+  return localVoiceIDs.map((id) => {
+    const item = catalog.find((voice) => voice.id === id);
+    return { id, name: item?.name || names[id], available: item ? item.available !== false : id === "anon" && Boolean(config?.anonVoiceAvailable) };
+  });
+}
+function voiceOptions() { return [{ id: "default", name: "跟随默认音色", available: true }, ...localVoiceOptions(), { id: "browser", name: "设备朗读", available: true }]; }
+function savedVoice() { return currentCompanion().voice || "default"; }
+function previewVoice() { return $("#settings-companion-voice")?.value || savedVoice(); }
+function resolvedVoice(choice = savedVoice()) {
+  return localVoiceIDs.includes(choice) ? "gpt-sovits" : choice === "browser" ? "browser" : config?.serverTTS ? config.ttsProvider : "browser";
+}
+function voiceName(choice = savedVoice()) {
+  if (choice === "browser") return "设备朗读";
+  if (choice === "default") {
+    if (localVoiceIDs.includes(config?.defaultVoice)) return localVoiceOptions().find((voice) => voice.id === config.defaultVoice).name;
+    return resolvedVoice(choice) === "gpt-sovits" ? "默认本地音色" : resolvedVoice(choice) === "browser" ? "设备朗读" : "默认语音服务";
+  }
+  return localVoiceOptions().find((voice) => voice.id === choice)?.name || "所选音色";
+}
+function voiceAvailable(choice) { return !localVoiceIDs.includes(choice) || Boolean(localVoiceOptions().find((voice) => voice.id === choice)?.available); }
+function fillVoiceSelect(select, selected) {
+  select.replaceChildren();
+  for (const voice of voiceOptions()) {
+    const option = node("option", "", voice.name + (voice.available ? "" : "（未就绪）"));
+    option.value = voice.id; option.disabled = !voice.available; select.append(option);
+  }
+  select.value = voiceOptions().some((voice) => voice.id === selected) ? selected : "default";
+}
+function renderVoiceSettings() {
+  const companion = currentCompanion();
+  const select = $("#settings-companion-voice");
+  const changedCompanion = select.dataset.companionId !== companion.id;
+  const choice = changedCompanion ? savedVoice() : select.value || savedVoice();
+  fillVoiceSelect(select, choice);
+  select.dataset.companionId = companion.id || "";
+  select.disabled = savingCompanionVoice;
+  $("#save-companion-voice").disabled = savingCompanionVoice || select.value === savedVoice() || !voiceAvailable(select.value);
+  if (changedCompanion) $("#companion-voice-status").textContent = `已保存：${voiceName()}。更改后可先试听，保存音色后用于聊天回复。`;
+}
+function speechLanguage() { return state.settings.speechLanguage || "zh"; }
+function languageLabel(language) { return language === "yue" ? "粤语" : "普通话"; }
+function updateVoiceNotes() {
+  const preview = previewVoice();
+  const provider = resolvedVoice(preview);
+  const selectedLanguage = $("#speech-language")?.value || speechLanguage();
+  const draft = preview !== savedVoice();
+  $("#voice-service-note").textContent = `聊天回复：${voiceName()} · ${languageLabel(speechLanguage())}。`;
+  $("#voice-preview-note").textContent = `试听${draft ? "未保存的选择" : "当前音色"}：${voiceName(preview)} · ${languageLabel(selectedLanguage)}。` + (provider === "gpt-sovits" ? "首次切换音色可能需要稍等片刻。" : "无需开启自动朗读。");
+  $("#connection-copy").textContent = `${config?.chatMode === "live" ? "AI 对话" : "本地演示回复"} · ${config?.serverASR ? "录音识别" : "浏览器识别"} · ${voiceName()} · ${languageLabel(speechLanguage())}`;
+}
+async function saveCompanionVoice() {
+  if (savingCompanionVoice) return;
+  const companion = currentCompanion();
+  if (!companion.id) { toast("伴侣还未加载，请稍后重试。"); return; }
+  const choice = previewVoice();
+  if (!voiceAvailable(choice)) { toast("这个音色的资源还未就绪，请选择其他音色。"); return; }
+  if (choice === savedVoice()) return;
+  stopReplyAudio(); cleanSpeechCache();
+  savingCompanionVoice = true; renderVoiceSettings();
+  $("#companion-voice-status").textContent = "正在保存音色…";
+  try {
+    const body = { name: companion.name, identity: companion.identity, personality: companion.personality, speakingStyle: companion.speakingStyle, greeting: companion.greeting, theme: companion.theme, imageUrl: companion.imageUrl, voice: choice };
+    const updated = await api(`/api/companions/${companion.id}`, { method: "PUT", body });
+    state.companions = state.companions.map((item) => item.id === updated.id ? updated : item);
+    if (currentCompanion().id === updated.id) {
+      $("#settings-companion-voice").value = updated.voice || "default";
+      $("#companion-voice-status").textContent = `已保存：${voiceName(updated.voice)}。接下来的聊天回复会使用这个声音。`;
+    }
+    toast(`已为${updated.name}保存${voiceName(updated.voice)}音色。`);
+  } catch (error) {
+    if (currentCompanion().id === companion.id) $("#companion-voice-status").textContent = "音色没有保存成功，可以重新尝试。";
+    toast(error);
+  } finally {
+    savingCompanionVoice = false; renderVoiceSettings(); updateVoiceNotes();
+  }
+}
 function formatTime(seconds) { seconds = Math.max(0, Math.floor(seconds || 0)); return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
 function shortTime(date) { return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(date)); }
 function persistSessionID() { try { localStorage.setItem("whale.currentSession", currentSessionID); } catch { /* Storage can be disabled. */ } }
@@ -109,8 +196,9 @@ function renderHistory() {
     const row = node("div", `history-item${item.id === currentSessionID ? " current" : ""}`);
     const open = node("button", "history-open");
     open.innerHTML = icon("chat");
-    open.append(node("span", "", item.title));
-    open.title = item.title;
+    const companion = state.companions.find((c) => c.id === item.companionId);
+    open.append(node("span", "", `${companion?.name || "大肥鱼"} · ${item.title}`));
+    open.title = `${companion?.name || "大肥鱼"} · ${item.title}`;
     open.addEventListener("click", () => {
       cancelPending(); cancelRecording(); stopPlayback(); currentSessionID = item.id; persistSessionID();
       renderHistory(); renderMessages(); switchView("home");
@@ -130,11 +218,12 @@ function renderHistory() {
 function scrollChat() { const el = $("#chat-scroll"); requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; }); }
 
 function renderMessages() {
+  renderCompanion();
   const target = $("#messages");
   target.replaceChildren();
   const messages = session()?.messages || [];
   const name = state.settings.nickname;
-  const greeting = `${name ? `${name}，` : ""}${config?.character.greeting || "嗨，我是小鲸。今天想聊些什么？"}`;
+  const greeting = `${name ? `${name}，` : ""}${currentCompanion().greeting}`;
   appendMessage(target, { id: "greeting", role: "assistant", content: greeting, status: "complete", createdAt: session()?.createdAt || new Date().toISOString() });
   for (const message of messages) appendMessage(target, message);
   $("#suggestions").hidden = messages.length > 1;
@@ -147,10 +236,10 @@ function appendMessage(target, message) {
   row.dataset.messageId = message.id;
   const avatar = node("span", "message-avatar");
   if (isUser) avatar.textContent = (state.settings.nickname || "你").slice(0, 1);
-  else { const img = node("img"); img.src = "/assets/whale-girl-sheet.png"; img.alt = ""; avatar.append(img); }
+  else { const img = node("img"); const portrait = portraitSource(); img.src = portrait || "/assets/whale-girl-sheet.png"; img.alt = ""; avatar.classList.toggle("portrait-avatar", Boolean(portrait)); avatar.append(img); }
   const body = node("div", "message-body");
   const label = node("div", "message-label");
-  label.append(node("span", "", isUser ? (state.settings.nickname || "你") : "小鲸"), node("time", "", shortTime(message.createdAt)));
+  label.append(node("span", "", isUser ? (state.settings.nickname || "你") : currentCompanion().name), node("time", "", shortTime(message.createdAt)));
   body.append(label, node("div", "message-bubble", message.content));
   if (message.songIds?.length) {
     for (const id of message.songIds) {
@@ -185,7 +274,8 @@ function updateCharacter() {
   let bubble = "你来啦，给你留了个位置。";
   if (recording) { mode = "listening"; caption = "认真听你说"; bubble = "嗯嗯，我在听呢…"; }
   else if (transcribing) { mode = "thinking"; caption = "正在整理你的话"; bubble = "让我听清楚一点…"; }
-  else if (pending || speechRequest) { mode = "thinking"; caption = "正在想怎么回应"; bubble = "稍等，让我想一小下。"; }
+  else if (speechRequest) { mode = "thinking"; caption = "正在合成声音"; bubble = "正在准备声音，稍等一下。"; }
+  else if (pending) { mode = "thinking"; caption = "正在想怎么回应"; bubble = "稍等，让我想一小下。"; }
   else if (currentSong && !songAudio.paused) { mode = "singing"; caption = "陪你听一首小曲"; bubble = "这三十六秒，留给音乐 ♪"; }
   else if (speaking) { mode = "speaking"; caption = "正在和你说话"; bubble = "把小小的心情，慢慢说给你听。"; }
   $("#companion-card").dataset.state = mode;
@@ -197,6 +287,9 @@ function updateCharacter() {
     $("#character-bubble").textContent = ["嘿嘿，收到你的摸摸啦。", "诶？我有一点点害羞…", "今天也要和你一起元气满满！", "谢谢你来陪我呀。"][(touchIndex - 1) % moods.length];
   } else setExpression(mode);
   $("#stop-voice").hidden = !speaking && !speechRequest;
+  $("#voice-preview-stop").hidden = !speaking && !speechRequest;
+  $("#voice-preview").disabled = Boolean(speechRequest || pending || recording || transcribing);
+  $("#voice-preview-status").textContent = speechRequest ? "正在合成声音…" : speaking ? "正在播放" : "";
 }
 
 function updatePendingUI() {
@@ -209,8 +302,8 @@ function updatePendingUI() {
   updateCharacter();
 }
 
-async function createSession() {
-  const item = await api("/api/sessions", { method: "POST" });
+async function createSession(companionId = currentCompanion().id || state.activeCompanionId) {
+  const item = await api("/api/sessions", { method: "POST", body: { companionId } });
   state.sessions.unshift(item); currentSessionID = item.id; persistSessionID(); return item;
 }
 
@@ -289,6 +382,7 @@ function stopReplyAudio() {
   if (speechRequest) { speechRequest.abort(); speechRequest = null; }
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   replyAudio.pause(); replyAudio.removeAttribute("src"); replyAudio.load();
+  if (transientSpeechURL) { URL.revokeObjectURL(transientSpeechURL); transientSpeechURL = null; }
   speaking = false;
   updateCharacter();
 }
@@ -335,26 +429,34 @@ function updatePlayer() {
   if (Number.isFinite(songAudio.duration)) $("#player-progress").max = String(songAudio.duration);
 }
 
-async function speakText(text) {
+async function speakText(text, volume = state.settings.volume, language = speechLanguage(), voiceOverride) {
+  text = text.trim();
+  if (!text) { toast("先输入一句想试听的话。"); return; }
   if (recording || transcribing || pending) { toast("先结束当前操作，再听这一条吧。"); return; }
   stopPlayback();
   const generation = mediaGeneration;
-  if (config.serverTTS) {
-    let url = speechURLs.get(text);
+  const choice = voiceOverride === undefined ? savedVoice() : voiceOverride;
+  if (!voiceAvailable(choice)) { toast(`${voiceName(choice)}的资源还未就绪，请在偏好中选择其他音色。`); return; }
+  const provider = resolvedVoice(choice);
+  if (provider !== "browser") {
+    const realtime = provider === "gpt-sovits";
+    const cacheKey = `${currentCompanion().id}:${choice}:${language}:${text}`;
+    let url = realtime ? null : speechURLs.get(cacheKey);
     if (!url) {
       const controller = new AbortController(); speechRequest = controller; updateCharacter();
       try {
-        const res = await fetch("/api/speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: controller.signal });
+        const res = await fetch("/api/speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, companionId: currentCompanion().id, language, voice: voiceOverride }), signal: controller.signal });
         if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || "声音暂时没有生成成功，文字仍然保留。"); }
         const blob = await res.blob();
         if (generation !== mediaGeneration) return;
-        url = URL.createObjectURL(blob); speechURLs.set(text, url);
+        url = URL.createObjectURL(blob);
+        if (realtime) transientSpeechURL = url; else speechURLs.set(cacheKey, url);
         if (speechURLs.size > 20) { const oldest = speechURLs.keys().next().value; URL.revokeObjectURL(speechURLs.get(oldest)); speechURLs.delete(oldest); }
       } catch (error) { if (error.name !== "AbortError" && generation === mediaGeneration) toast(error); return; }
       finally { if (speechRequest === controller) speechRequest = null; updateCharacter(); }
     }
     if (generation !== mediaGeneration) return;
-    replyAudio.src = url; replyAudio.volume = state.settings.volume / 100;
+    replyAudio.src = url; replyAudio.volume = volume / 100;
     try { await replyAudio.play(); }
     catch (error) { if (generation === mediaGeneration) toast(error.name === "NotAllowedError" ? "点一下这条消息的“听一听”，就能播放声音。" : "声音播放失败，文字回复仍然保留。"); }
     return;
@@ -366,10 +468,10 @@ async function speakText(text) {
     if (generation !== mediaGeneration) return;
     voices = speechSynthesis.getVoices();
   }
-  const voice = voices.find((v) => /zh[-_]CN/i.test(v.lang)) || voices.find((v) => /^zh/i.test(v.lang));
-  if (!voice) { toast("这台设备暂时没有可用的中文朗读声音。文字和音乐仍然可以使用。"); return; }
+  const voice = language === "yue" ? voices.find((v) => /^(yue|zh[-_](HK|MO))/i.test(v.lang)) : voices.find((v) => /^(cmn|zh[-_](CN|TW)|zh$)/i.test(v.lang));
+  if (!voice) { toast(`这台设备没有可用的${languageLabel(language)}声音。可以在偏好中选择一个本地角色音色后重试。`); return; }
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.voice = voice; utterance.lang = "zh-CN"; utterance.rate = 0.94; utterance.pitch = 1.12; utterance.volume = state.settings.volume / 100;
+  utterance.voice = voice; utterance.lang = language === "yue" ? "zh-HK" : "zh-CN"; utterance.rate = 0.94; utterance.pitch = 1.12; utterance.volume = volume / 100;
   utterance.onstart = () => { if (generation === mediaGeneration) { speaking = true; updateCharacter(); } };
   utterance.onend = () => { if (generation === mediaGeneration) { speaking = false; updateCharacter(); } };
   utterance.onerror = (event) => { if (generation === mediaGeneration) { speaking = false; updateCharacter(); if (!["canceled", "interrupted"].includes(event.error)) toast("这次没有念出声音，你可以再点一次“听一听”。"); } };
@@ -390,7 +492,7 @@ function renderMemories() {
     const footer = node("div", "memory-card-footer"); footer.append(node("span", "", new Date(memory.updatedAt).toLocaleDateString("zh-CN")));
     const actions = node("div");
     actions.append(iconButton("edit", "编辑这条记忆", () => openMemory(memory.content, memory)), iconButton("trash", "删除这条记忆", async () => {
-      if (!await confirmAction("让这件小事离开记忆瓶？", "删除后，小鲸不会再从记忆瓶带上这条内容。已有聊天里的文字会保留，可以新建对话。")) return;
+      if (!await confirmAction("让这件小事离开记忆瓶？", "删除后，伴侣不会再从记忆瓶带上这条内容。已有聊天里的文字会保留，可以新建对话。")) return;
       await api(`/api/memories/${memory.id}`, { method: "DELETE" }); state.memories = state.memories.filter((m) => m.id !== memory.id); renderMemories(); toast("这条记忆已经删除。");
     }));
     footer.append(actions); card.append(top, node("p", "", memory.content), footer); target.append(card);
@@ -414,15 +516,131 @@ function confirmAction(title, copy) {
 function finishConfirm(accepted) { $("#confirm-dialog").close(); if (confirmResolver) { const resolve = confirmResolver; confirmResolver = null; resolve(accepted); } }
 
 function renderSettings() {
+  renderCompanion();
   $("#nickname").value = state.settings.nickname;
   $("#setting-voice").checked = state.settings.voice;
   $("#volume").value = String(state.settings.volume);
+  $("#speech-language").value = speechLanguage();
+  const previewSamples = ["你好呀，今天也想陪你聊聊天。", "你好呀，今日都想陪你倾下偈。"];
+  if (previewSamples.includes($("#voice-preview-text").value)) $("#voice-preview-text").value = previewSamples[speechLanguage() === "yue" ? 1 : 0];
+  updateVoiceNotes();
   $("#volume-value").textContent = `${state.settings.volume}%`;
   $("#settings-status").textContent = "";
   $("#sidebar-name").textContent = state.settings.nickname || "海边的朋友";
   $("#user-avatar").textContent = (state.settings.nickname || "你").slice(0, 1);
   $("#voice-toggle").setAttribute("aria-pressed", String(state.settings.voice));
-  $("#voice-toggle").innerHTML = icon(state.settings.voice ? "volume" : "mute") + "<span>听她说话</span>";
+  $("#voice-toggle").innerHTML = icon(state.settings.voice ? "volume" : "mute") + "<span></span>";
+  $("#voice-toggle span").textContent = `听${currentCompanion().name}说话`;
+}
+
+function renderCompanion() {
+  const companion = currentCompanion();
+  $("#character-name").textContent = companion.name;
+  $("#character-name").title = companion.name;
+  const portrait = portraitSource(companion);
+  const theme = companion.theme || "ocean";
+  document.body.dataset.theme = theme;
+  document.body.classList.toggle("has-portrait", Boolean(portrait));
+  $("#companion-card").classList.toggle("has-portrait", Boolean(portrait));
+  $("#character-portrait").hidden = !portrait;
+  $("#whale-character").hidden = Boolean(portrait);
+  const portraitTouch = $("#portrait-touch");
+  if (portraitTouch) { portraitTouch.hidden = !portrait; portraitTouch.setAttribute("aria-label", `和${companion.name}打个招呼`); }
+  if (portrait) { $("#character-portrait").src = portrait === "/assets/anon.png" ? "/assets/anon-poster.png" : portrait; $("#character-portrait").alt = companion.name + "的参考形象"; }
+  else $("#character-portrait").removeAttribute("src");
+  for (const id of ["brand-portrait", "chat-portrait"]) {
+    const img = $("#" + id);
+    if (img) { img.src = portrait || "/assets/whale-girl-sheet.png"; img.parentElement.classList.toggle("portrait-avatar", Boolean(portrait)); }
+  }
+  const anon = theme === "anon";
+  if ($("#brand-name")) $("#brand-name").textContent = anon ? "ANON ROOM" : "鲸伴";
+  if ($("#brand-kicker")) $("#brand-kicker").textContent = anon ? "A LITTLE MOMENT WITH YOU" : "A LITTLE ROOM FOR YOU";
+  if ($("#room-name")) $("#room-name").textContent = `${companion.name}的陪伴空间`;
+  document.title = `${companion.name} · 鲸伴`;
+  $("meta[name=theme-color]").content = anon ? "#fff2f7" : "#f5f8fb";
+  const copy = {
+    "hero-eyebrow": anon ? "ANON'S LITTLE ROOM" : "YOUR LITTLE COMPANION",
+    "hero-title": anon ? "今天的故事，\n说给我听吧。" : "今天，也想陪着你。",
+    "hero-copy": anon ? "练习结束后的空隙，刚好留给你。" : "开心的小事，或是没来由的心情，都可以。",
+    "hero-footnote": anon ? "再小的日常，也值得一起期待。" : "不必急着找到答案，先让心情靠靠岸。",
+  };
+  for (const [id, value] of Object.entries(copy)) if ($("#" + id)) $("#" + id).textContent = value;
+  $("#character-identity").textContent = companion.identity || "你的专属伙伴";
+  $("#chat-title").textContent = `和${companion.name}聊聊`;
+  $("#typing-label").textContent = `${companion.name}正在想怎么回答…`;
+  $("#message-input").placeholder = `和${companion.name}说说话吧…`;
+  $("#message-input").setAttribute("aria-label", `给${companion.name}发消息`);
+  $("#whale-character").setAttribute("aria-label", `摸摸${companion.name}，切换一个表情`);
+  $("#voice-toggle span").textContent = `听${companion.name}说话`;
+  const selector = $("#companion-select");
+  selector.replaceChildren();
+  for (const item of state.companions) { const option = node("option", "", item.name); option.value = item.id; selector.append(option); }
+  selector.value = companion.id || "";
+  $("#companion-summary").textContent = `${companion.identity || ""}；${companion.personality || ""}；${companion.speakingStyle || ""}`;
+  renderVoiceSettings();
+  updateVoiceNotes();
+}
+
+function openCompanion(companion = null) {
+  $("#companion-id").value = companion?.id || "";
+  $("#companion-name").value = companion?.name || "";
+  $("#companion-identity").value = companion?.identity || "";
+  $("#companion-personality").value = companion?.personality || "";
+  $("#companion-speaking-style").value = companion?.speakingStyle || "";
+  $("#companion-greeting").value = companion?.greeting || "";
+  $("#companion-theme").value = companion?.theme || "ocean";
+  fillVoiceSelect($("#companion-voice"), companion?.voice || "default");
+  cancelCompanionImageUpload();
+  companionImageURL = companion?.imageUrl || "";
+  $("#companion-image").value = "";
+  $("#companion-image-status").textContent = "";
+  renderCompanionImage();
+  $("#companion-dialog-title").textContent = companion ? "编辑伴侣设定" : "添加一位伴侣";
+  $("#companion-dialog").showModal();
+  $("#companion-name").focus();
+}
+
+function renderCompanionImage() {
+  const img = $("#companion-image-preview");
+  img.hidden = !companionImageURL;
+  if (companionImageURL) img.src = companionImageURL; else img.removeAttribute("src");
+  $("#companion-image-remove").hidden = !companionImageURL;
+  $("#companion-image-remove").textContent = "恢复默认形象";
+  if ($("#companion-image-url")) $("#companion-image-url").value = companionImageURL;
+}
+function cancelCompanionImageUpload() {
+  companionImageGeneration++;
+  companionImageRequest?.abort(); companionImageRequest = null;
+  $("#companion-form button[type=submit]").disabled = false;
+}
+async function uploadCompanionImage(file) {
+  if (!file) return;
+  cancelCompanionImageUpload();
+  if (file.size > 5 * 1024 * 1024 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) { $("#companion-image").value = ""; $("#companion-image-status").textContent = "未替换参考图，请重新选择。"; toast("请选择 5 MB 以内的 PNG、JPG 或 WebP 图片。"); return; }
+  const generation = companionImageGeneration;
+  const controller = new AbortController(); companionImageRequest = controller;
+  $("#companion-form button[type=submit]").disabled = true;
+  $("#companion-image-status").textContent = "正在保存参考图…";
+  try {
+    const form = new FormData(); form.append("image", file);
+    const result = await api("/api/companion-images", { method: "POST", body: form, signal: controller.signal });
+    if (generation !== companionImageGeneration) return;
+    companionImageURL = result.imageUrl;
+    renderCompanionImage();
+    $("#companion-image-status").textContent = "参考图已就绪，保存伴侣后生效。";
+  } catch (error) { if (error.name !== "AbortError" && generation === companionImageGeneration) { $("#companion-image-status").textContent = "参考图未能保存，请重新选择。"; toast(error); } }
+  finally { if (generation === companionImageGeneration) { companionImageRequest = null; $("#companion-form button[type=submit]").disabled = false; } }
+}
+
+async function chooseCompanion(id) {
+  cancelPending(); cancelRecording(); stopPlayback();
+  const result = await api(`/api/companions/${id}/select`, { method: "POST" });
+  state.activeCompanionId = result.activeCompanionId;
+  await createSession(id);
+  renderHistory(); renderMessages();
+  switchView("home");
+  $("#message-input").value = "";
+  toast(`已经为你和${currentCompanion().name}开启新对话。`);
 }
 
 async function saveSettings(settings, announce = true) {
@@ -568,6 +786,44 @@ function bindEvents() {
   $("#cancel-chat").addEventListener("click", () => { cancelPending(); toast("已经停下来了，想好了再说也没关系。"); });
   $("#quick-music").addEventListener("click", () => switchView("music"));
   $("#voice-toggle").addEventListener("click", () => saveSettings({ ...state.settings, voice: !state.settings.voice }, false).catch(toast));
+  $("#choose-companion").addEventListener("click", () => switchView("settings"));
+  $("#add-companion").addEventListener("click", () => openCompanion());
+  $("#edit-companion").addEventListener("click", () => openCompanion(currentCompanion()));
+  $("#apply-anon-template").addEventListener("click", () => chooseCompanion("template-anon").catch(toast));
+  $("#companion-image").addEventListener("change", (event) => uploadCompanionImage(event.target.files[0]).catch(toast));
+  $("#companion-image-remove").addEventListener("click", () => { cancelCompanionImageUpload(); companionImageURL = ""; $("#companion-image").value = ""; $("#companion-image-status").textContent = "保存后恢复默认形象。"; renderCompanionImage(); });
+  $("#companion-dialog").addEventListener("close", cancelCompanionImageUpload);
+  $("#companion-theme").addEventListener("change", () => { if ($("#companion-theme").value === "anon" && $("#companion-voice").value === "default") $("#companion-voice").value = "anon"; });
+  $("#settings-companion-voice").addEventListener("change", () => {
+    stopReplyAudio(); cleanSpeechCache(); renderVoiceSettings(); updateVoiceNotes();
+    $("#companion-voice-status").textContent = previewVoice() === savedVoice() ? `已保存：${voiceName()}。` : `尚未保存，聊天仍使用${voiceName()}；可以先试听当前选择。`;
+  });
+  $("#save-companion-voice").addEventListener("click", () => saveCompanionVoice().catch(toast));
+  $("#speech-language").addEventListener("change", () => {
+    stopReplyAudio(); cleanSpeechCache();
+    const samples = ["你好呀，今天也想陪你聊聊天。", "你好呀，今日都想陪你倾下偈。"];
+    if (samples.includes($("#voice-preview-text").value)) $("#voice-preview-text").value = samples[$("#speech-language").value === "yue" ? 1 : 0];
+    updateVoiceNotes();
+  });
+  $("#companion-select").addEventListener("change", (event) => { const id = event.currentTarget.value; chooseCompanion(id).catch((error) => { renderCompanion(); toast(error); }); });
+  $("#companion-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (companionImageRequest) { toast("参考图还在保存，请稍等一下。"); return; }
+    const id = $("#companion-id").value;
+    const body = { name: $("#companion-name").value.trim(), identity: $("#companion-identity").value.trim(), personality: $("#companion-personality").value.trim(), speakingStyle: $("#companion-speaking-style").value.trim(), greeting: $("#companion-greeting").value.trim(), theme: $("#companion-theme").value, voice: $("#companion-voice").value, imageUrl: companionImageURL };
+    const button = event.submitter; if (button) button.disabled = true;
+    try {
+      const companion = await api(id ? `/api/companions/${id}` : "/api/companions", { method: id ? "PUT" : "POST", body });
+      if (id) state.companions = state.companions.map((c) => c.id === id ? companion : c); else state.companions.push(companion);
+      $("#companion-dialog").close();
+      renderHistory(); renderMessages();
+      if (!id) { toast("伴侣已保存，正在开启对话。"); await chooseCompanion(companion.id); }
+      else toast("伴侣设定已保存，会用于下一条新回复。");
+    } catch (error) { toast(error); renderCompanion(); }
+    finally { if (button) button.disabled = false; }
+  });
+  $("#voice-preview").addEventListener("click", () => speakText($("#voice-preview-text").value, Number($("#volume").value), $("#speech-language").value, previewVoice()).catch(toast));
+  $("#voice-preview-stop").addEventListener("click", stopReplyAudio);
   $("#stop-voice").addEventListener("click", stopReplyAudio);
   $("#mic-button").addEventListener("click", () => toggleRecording().catch(toast));
   $("#cancel-recording").addEventListener("click", () => { cancelRecording(); $("#input-hint").textContent = ""; toast("这次录音已取消，没有发送。"); });
@@ -600,7 +856,7 @@ function bindEvents() {
   $("#confirm-cancel").addEventListener("click", () => finishConfirm(false));
   $("#confirm-accept").addEventListener("click", () => finishConfirm(true));
   $("#confirm-dialog").addEventListener("cancel", (event) => { event.preventDefault(); finishConfirm(false); });
-  $("#settings-form").addEventListener("submit", (event) => { event.preventDefault(); saveSettings({ nickname: $("#nickname").value.trim(), voice: $("#setting-voice").checked, volume: Number($("#volume").value) }).catch(toast); });
+  $("#settings-form").addEventListener("submit", (event) => { event.preventDefault(); saveSettings({ nickname: $("#nickname").value.trim(), voice: $("#setting-voice").checked, volume: Number($("#volume").value), speechLanguage: $("#speech-language").value }).catch(toast); });
   $("#volume").addEventListener("input", (event) => { $("#volume-value").textContent = `${event.target.value}%`; songAudio.volume = Number(event.target.value) / 100; replyAudio.volume = Number(event.target.value) / 100; });
   $("#clear-history").addEventListener("click", async () => {
     if (!await confirmAction("清空所有聊天记录？", "所有对话都会删除。记忆瓶与偏好设置会保留。")) return;
@@ -615,7 +871,9 @@ function bindEvents() {
   $("#mode-got-it").addEventListener("click", () => $("#mode-dialog").close());
   document.addEventListener("visibilitychange", () => { if (document.hidden && (recording || transcribing)) cancelRecording(); });
   window.addEventListener("pagehide", () => { cancelPending(); cancelRecording(); stopPlayback(); cleanSpeechCache(); });
-  $("#character-sheet").addEventListener("error", () => { $("#whale-character").hidden = true; $("#character-bubble").textContent = "小鲸的照片还没加载好，但我还在这里。"; });
+  $("#character-sheet").addEventListener("error", () => { $("#whale-character").hidden = true; $("#character-bubble").textContent = "伴侣的照片还没加载好，但我还在这里。"; });
+  $("#portrait-touch")?.addEventListener("click", () => { touchedUntil = Date.now() + 2400; touchIndex++; updateCharacter(); setTimeout(updateCharacter, 2450); });
+  $("#character-portrait").addEventListener("error", () => { $("#character-portrait").hidden = true; $("#character-bubble").textContent = "图片暂时没有加载好，我们先聊一会儿。"; });
   $("#whale-character").addEventListener("click", () => {
     touchIndex++; touchedUntil = Date.now() + 2400; updateCharacter();
     setTimeout(updateCharacter, 2450);
@@ -634,14 +892,23 @@ async function init() {
     $("#chat-disclaimer").textContent = live ? "回复由 AI 生成。重要的信息，请保留自己的判断。" : "当前为本地演示回复，用于体验互动流程。";
     $("#connection-tag").textContent = live ? "AI 已连接" : "演示模式";
     $("#connection-copy").textContent = `${live ? "AI 对话" : "本地演示回复"} · ${config.serverASR ? "录音识别服务" : "浏览器识别"} · ${config.serverTTS ? "角色语音服务" : "设备声音"} · 合成哼唱`;
-    $("#voice-service-note").textContent = config.serverTTS ? "已连接语音合成服务，使用后端配置的音色。" : "使用这台设备的中文朗读声音，音色取决于本机可用声音。";
+    $("#voice-service-note").textContent = config.ttsProvider === "gpt-sovits" ? "使用 GPT-SoVITS 本地推理；每次试听和朗读都会实时合成，首次加载模型可能较慢。" : config.serverTTS ? "已连接语音合成服务，使用后端配置的音色。" : "使用这台设备的中文朗读声音，音色取决于本机可用声音。";
+    $("#voice-preview-note").textContent = config.ttsProvider === "gpt-sovits" ? "每次点击都会调用 GPT-SoVITS 实时合成；首次推理可能需要等待。使用上方音量，无需开启自动朗读。" : "输入一句话，使用当前语音服务播放。使用上方音量，无需开启自动朗读。";
     $("#mode-copy").textContent = live ? "当前已连接 AI 对话服务，聊天会参考本次对话和你主动保存的记忆。" : "当前聊天由本地规则生成，适合体验角色、会话和记忆流程。配置 AI 服务后，可以开启真实对话。";
-    try { currentSessionID = localStorage.getItem("whale.currentSession") || ""; } catch { /* Optional storage. */ }
-    if (!state.sessions.some((s) => s.id === currentSessionID)) currentSessionID = state.sessions[0]?.id || "";
-    if (!currentSessionID) await createSession();
+    let homeVersionSeen = false;
+    try {
+      currentSessionID = localStorage.getItem("whale.currentSession") || "";
+      homeVersionSeen = localStorage.getItem("whale.homeVersion2") === "1";
+      localStorage.removeItem("whale.anonTemplateSeen");
+    } catch { /* Optional storage. */ }
+    if (!homeVersionSeen || !state.sessions.some((item) => item.id === currentSessionID)) {
+      currentSessionID = state.sessions.find((item) => item.companionId === state.activeCompanionId)?.id || "";
+    }
+    if (!currentSessionID) await createSession(state.activeCompanionId || "default-whale");
+    try { localStorage.setItem("whale.homeVersion2", "1"); } catch { /* Optional storage. */ }
     persistSessionID(); renderHistory(); renderMessages(); renderMusic(); renderMemories(); renderSettings(); updateCharacter();
   } catch (error) {
-    toast(error); $("#messages").append(node("p", "empty-error", "小鲸暂时没有连上本地服务。启动后刷新页面，就能见面啦。"));
+    toast(error); $("#messages").append(node("p", "empty-error", "鲸伴暂时没有连上本地服务。启动后刷新页面，就能见面啦。"));
     $("#send-button").disabled = true; $("#mic-button").disabled = true;
   }
 }

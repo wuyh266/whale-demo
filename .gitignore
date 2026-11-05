@@ -1,5 +1,24 @@
+# Private settings and application data
 .env
-data/
-bin/
-.qa/
+.env.*
+!.env.example
+/data/
+
+# Build output, local reports, and caches
+/bin/
+/dist/
+/.qa/
 *.log
+__pycache__/
+*.py[cod]
+*.pickle
+
+# Local inference runtime and model resources
+/backend/gpt-sovits/runtime/
+/backend/gpt-sovits/GPT_weights*/
+/backend/gpt-sovits/SoVITS_weights*/
+/backend/gpt-sovits/GPT_SoVITS/pretrained_models/
+/backend/gpt-sovits/GPT_SoVITS/text/G2PWModel/
+/backend/gpt-sovits/tools/AP_BWE_main/24kto48k/*.zip
+/backend/gpt-sovits/GPT_SoVITS/text/ja_userdic/user.dict
+/backend/gpt-sovits/GPT_SoVITS/text/ja_userdic/userdict.md5

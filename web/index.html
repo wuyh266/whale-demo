@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f8fb">
-  <title>鲸伴 · 和小鲸待一会儿</title>
-  <meta name="description" content="有些话，慢慢说也没关系。和小鲸聊天、分享日常，听一首轻轻的歌。">
+  <meta name="theme-color" content="#fff8fb">
+  <title>鲸伴 · 和大肥鱼待一会儿</title>
+  <meta name="description" content="有些话，慢慢说也没关系。和大肥鱼聊天、分享日常，听一首轻轻的歌。">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/anon-theme.css">
   <script defer src="/app.js"></script>
 </head>
-<body>
+<body data-theme="ocean">
   <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
     <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/></symbol>
@@ -36,7 +37,7 @@
   </svg>
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="鲸伴首页"><span class="brand-mark"><img src="/assets/whale-girl-sheet.png" alt=""></span><span>鲸伴<small>A LITTLE OCEAN FOR YOU</small></span></a>
+      <a class="brand" href="/" aria-label="鲸伴首页"><span class="brand-mark"><img id="brand-portrait" src="/assets/whale-girl-sheet.png" alt=""></span><span><span id="brand-name">鲸伴</span><small id="brand-kicker">A LITTLE ROOM FOR YOU</small></span></a>
       <button class="new-session" id="new-session"><svg class="icon"><use href="#i-plus"/></svg>开启一段新日常</button>
       <nav class="navigation" aria-label="主要导航">
         <button class="nav-item active" data-view="home"><svg class="icon"><use href="#i-home"/></svg><span>陪伴空间</span><span class="nav-dot"></span></button>
@@ -49,51 +50,60 @@
       <div class="user-block"><span class="user-avatar" id="user-avatar">你</span><div><strong id="sidebar-name">海边的朋友</strong><small>这片海，给你留了位置</small></div><span class="online-dot"></span></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div class="breadcrumb">我的小小海域<span>/</span><strong id="page-title">陪伴空间</strong></div><div class="topbar-right"><span class="today" id="today"></span><button class="mode-badge" id="mode-badge" title="查看当前体验模式"><span></span>演示模式<svg class="icon"><use href="#i-info"/></svg></button></div></header>
+      <header class="topbar"><div class="breadcrumb"><span id="room-name">我的陪伴空间</span><span>/</span><strong id="page-title">陪伴空间</strong></div><div class="topbar-right"><span class="today" id="today"></span><button class="mode-badge" id="mode-badge" title="查看当前体验模式"><span></span>演示模式<svg class="icon"><use href="#i-info"/></svg></button></div></header>
 
       <section class="view home-view" id="view-home" aria-label="陪伴空间">
         <div class="companion-card" id="companion-card" data-state="idle">
-          <div class="companion-heading"><span class="eyebrow"><span class="tiny-wave">≈</span> YOUR LITTLE COMPANION</span><h1>今天，也想陪着你。</h1><p>开心的小事，或是没来由的心情，都可以。</p></div>
+          <div class="companion-heading"><span class="eyebrow" id="hero-eyebrow">YOUR LITTLE COMPANION</span><h1 id="hero-title">今天，也想陪着你。</h1><p id="hero-copy">开心的小事，或是没来由的心情，都可以。</p><button type="button" class="text-button companion-shortcut" id="choose-companion"><svg class="icon"><use href="#i-heart"/></svg>选择 / 添加伴侣</button></div>
           <div class="character-stage">
+            <span class="portrait-decoration" aria-hidden="true">a little closer.</span>
+            <button type="button" class="portrait-touch" id="portrait-touch" hidden aria-label="和伴侣打个招呼" title="和她打个招呼"><img id="character-portrait" alt="伴侣参考图" draggable="false"></button>
             <span class="orbit orbit-one"></span><span class="orbit orbit-two"></span>
             <span class="floating-symbol symbol-star">✦</span><span class="floating-symbol symbol-note">♪</span><span class="floating-symbol symbol-dot"></span>
             <div class="character-bubble" id="character-bubble">你来啦，给你留了个位置。</div>
-            <button type="button" class="whale-character character-sprite" id="whale-character" aria-label="摸摸小鲸，切换一个表情" title="摸摸她"><img id="character-sheet" src="/assets/whale-girl-sheet.png" alt="蓝发鲸鱼娘小鲸，戴着白色女仆发饰，有蓝色眼睛和鲸鱼尾巴" draggable="false"></button>
+            <button type="button" class="whale-character character-sprite" id="whale-character" aria-label="摸摸大肥鱼，切换一个表情" title="摸摸她"><img id="character-sheet" src="/assets/whale-girl-sheet.png" alt="蓝发鲸鱼娘大肥鱼，戴着白色女仆发饰，有蓝色眼睛和鲸鱼尾巴" draggable="false"></button>
             <div class="character-shadow"></div>
             <div class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
           </div>
-          <div class="character-caption"><span class="character-status"><span id="character-state-dot"></span><strong>小鲸</strong><span class="caption-divider"></span><span id="character-status">在这里陪你</span></span><small>喜欢听你说话的蓝发鲸鱼娘 · 点她试试</small></div>
+          <div class="character-caption"><span class="character-status"><span id="character-state-dot"></span><strong id="character-name">大肥鱼</strong><span class="caption-divider"></span><span id="character-status">在这里陪你</span></span><small id="character-identity">喜欢听你说话的蓝发鲸鱼娘 · 点她试试</small></div>
           <div class="quick-actions"><button data-prompt="今天有点累，想和你待一会儿"><span class="quick-icon warm"><svg class="icon"><use href="#i-heart"/></svg></span><span>聊聊今天</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button><button id="quick-music"><span class="quick-icon cool"><svg class="icon"><use href="#i-music"/></svg></span><span>听一首小曲</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button></div>
-          <p class="stage-footnote">不必急着找到答案，先让心情靠靠岸。</p>
+          <p class="stage-footnote" id="hero-footnote">不必急着找到答案，先让心情靠靠岸。</p>
         </div>
 
         <div class="chat-card">
-          <div class="chat-header"><span class="small-avatar"><img src="/assets/whale-girl-sheet.png" alt=""></span><div><h2>和小鲸聊聊</h2><p><span class="online-dot"></span>我在，慢慢说</p></div><button class="icon-button" id="chat-new" aria-label="新建对话" title="新建对话"><svg class="icon"><use href="#i-plus"/></svg></button></div>
-          <div class="chat-scroll" id="chat-scroll" role="log" aria-label="聊天记录" aria-live="polite"><div class="chat-day">今天的小日常</div><div id="messages"></div><div class="typing" id="typing" hidden><span></span><span></span><span></span><small>小鲸正在想怎么回答…</small></div></div>
+          <div class="chat-header"><span class="small-avatar"><img id="chat-portrait" src="/assets/whale-girl-sheet.png" alt=""></span><div><h2 id="chat-title">和大肥鱼聊聊</h2><p><span class="online-dot"></span>我在，慢慢说</p></div><button class="icon-button" id="chat-new" aria-label="新建对话" title="新建对话"><svg class="icon"><use href="#i-plus"/></svg></button></div>
+          <div class="chat-scroll" id="chat-scroll" role="log" aria-label="聊天记录" aria-live="polite"><div class="chat-day">今天的小日常</div><div id="messages"></div><div class="typing" id="typing" hidden><span></span><span></span><span></span><small id="typing-label">大肥鱼正在想怎么回答…</small></div></div>
           <div class="suggestions" id="suggestions"><button data-prompt="你好呀，我们认识一下吧">认识一下 <span>↗</span></button><button data-prompt="给我唱一首歌吧">唱首歌吧 <span>♪</span></button></div>
           <div class="recording-banner" id="recording-banner" hidden><span class="recording-dot"></span><span id="recording-label">正在聆听</span><strong id="recording-time">00:00</strong><button id="cancel-recording">取消</button></div>
           <div class="reply-controls"><button class="voice-toggle" id="voice-toggle" aria-pressed="false"><svg class="icon"><use href="#i-mute"/></svg><span>听她说话</span></button><button class="text-button" id="stop-voice" hidden><svg class="icon"><use href="#i-stop"/></svg>停止声音</button><span id="input-hint"></span></div>
-          <form id="chat-form" class="composer"><textarea id="message-input" rows="2" maxlength="1000" aria-label="给小鲸发消息" placeholder="和小鲸说说话吧…"></textarea><div class="composer-bottom"><span id="composer-hint">Enter 发送 · Shift + Enter 换行</span><div><button type="button" class="mic-button" id="mic-button" aria-label="开始语音输入" title="开始语音输入"><svg class="icon"><use href="#i-mic"/></svg></button><button type="button" class="send-button cancel-button" id="cancel-chat" hidden aria-label="取消等待"><svg class="icon"><use href="#i-stop"/></svg></button><button type="submit" class="send-button" id="send-button" aria-label="发送消息"><svg class="icon"><use href="#i-arrow"/></svg></button></div></div></form>
+          <form id="chat-form" class="composer"><textarea id="message-input" rows="2" maxlength="1000" aria-label="给大肥鱼发消息" placeholder="和大肥鱼说说话吧…"></textarea><div class="composer-bottom"><span id="composer-hint">Enter 发送 · Shift + Enter 换行</span><div><button type="button" class="mic-button" id="mic-button" aria-label="开始语音输入" title="开始语音输入"><svg class="icon"><use href="#i-mic"/></svg></button><button type="button" class="send-button cancel-button" id="cancel-chat" hidden aria-label="取消等待"><svg class="icon"><use href="#i-stop"/></svg></button><button type="submit" class="send-button" id="send-button" aria-label="发送消息"><svg class="icon"><use href="#i-arrow"/></svg></button></div></div></form>
           <p class="chat-disclaimer" id="chat-disclaimer">当前为本地演示回复，用于体验互动流程。</p>
         </div>
       </section>
 
       <section class="view inner-view" id="view-music" hidden>
-        <div class="view-heading"><span class="eyebrow">A SOFT SOUNDTRACK</span><h1>让心情，听一会儿海。</h1><p>选一首小曲，让小鲸陪你度过这三十六秒。</p></div>
+        <div class="view-heading"><span class="eyebrow">A SOFT SOUNDTRACK</span><h1>让心情，听一会儿海。</h1><p>选一首小曲，让伴侣陪你度过这三十六秒。</p></div>
         <div class="music-grid" id="music-grid"></div>
         <div class="soft-notice"><svg class="icon"><use href="#i-info"/></svg><p>这里是三首原创旋律的<strong>合成哼唱示例</strong>，用于体验点歌与播放。它们带有电子音色，后续可替换成正式的角色演唱。</p></div>
       </section>
 
       <section class="view inner-view" id="view-memories" hidden>
-        <div class="view-heading heading-with-button"><div><span class="eyebrow">LITTLE THINGS THAT MATTER</span><h1>把小事，装进记忆瓶。</h1><p>你愿意留下的，小鲸会在聊天时带上。</p></div><button class="primary-button" id="add-memory"><svg class="icon"><use href="#i-plus"/></svg>留下一件小事</button></div>
+        <div class="view-heading heading-with-button"><div><span class="eyebrow">LITTLE THINGS THAT MATTER</span><h1>把小事，装进记忆瓶。</h1><p>你愿意留下的，伴侣会在聊天时带上。</p></div><button class="primary-button" id="add-memory"><svg class="icon"><use href="#i-plus"/></svg>留下一件小事</button></div>
         <div id="memory-grid" class="memory-grid"></div>
         <div class="soft-notice"><svg class="icon"><use href="#i-heart"/></svg><p>只有你主动保存的内容才会进入记忆瓶。修改或删除后，新对话会使用更新的记忆；已有对话仍可能包含你之前说过的话。</p></div>
       </section>
 
       <section class="view inner-view settings-view" id="view-settings" hidden>
         <div class="view-heading"><span class="eyebrow">MAKE YOURSELF AT HOME</span><h1>把这里，变成你的样子。</h1><p>一点小小的偏好，就能让相处更舒服。</p></div>
-        <form id="settings-form" class="settings-card"><div class="settings-section"><h2>怎么称呼你</h2><p>留空也可以，小鲸会叫你海边的朋友。</p><label for="nickname">你的昵称</label><input id="nickname" maxlength="24" placeholder="例如：小林" autocomplete="nickname"></div><div class="settings-section"><div class="setting-row"><div><h2>听小鲸说话</h2><p>收到回复时，用声音念给你听。</p></div><label class="switch"><input type="checkbox" id="setting-voice" aria-label="启用语音回复"><span></span></label></div><label for="volume" class="volume-label">声音大小 <output id="volume-value">70%</output></label><input id="volume" type="range" min="0" max="100" value="70"><p class="subtle" id="voice-service-note">使用这台设备的中文朗读声音。</p></div><div class="settings-actions"><span id="settings-status" aria-live="polite"></span><button class="primary-button" type="submit">保存偏好<svg class="icon"><use href="#i-check"/></svg></button></div></form>
+        <div class="settings-card companion-settings">
+          <div class="settings-card-heading"><div><span class="section-number">01 / COMPANION</span><h2>你想要的伴侣</h2></div><button type="button" class="template-button" id="apply-anon-template"><svg class="icon"><use href="#i-spark"/></svg>使用爱音模板</button></div>
+          <p>一张参考图，一点性格，就从你喜欢的样子开始。切换伴侣会开启新对话，旧聊天仍会保留。</p>
+          <label for="companion-select">当前对话的伴侣</label><div class="companion-picker"><select id="companion-select" aria-label="选择伴侣"></select><button type="button" class="secondary-button" id="edit-companion">编辑设定</button><button type="button" class="primary-button" id="add-companion"><svg class="icon"><use href="#i-plus"/></svg>添加伴侣</button></div>
+          <p class="companion-summary" id="companion-summary"></p><p class="subtle">角色资料会用于 AI 对话；演示模式展示基础回复。参考图、主题和声音都可以单独调整。</p>
+        </div>
+        <form id="settings-form" class="settings-card"><div class="settings-section"><h2>怎么称呼你</h2><p>留空也可以，伴侣会用默认称呼和你聊天。</p><label for="nickname">你的昵称</label><input id="nickname" maxlength="24" placeholder="例如：小林" autocomplete="nickname"></div><div class="settings-section"><div class="setting-row"><div><h2>听伴侣说话</h2><p>收到回复时，用声音念给你听。</p></div><label class="switch"><input type="checkbox" id="setting-voice" aria-label="启用语音回复"><span></span></label></div><label for="settings-companion-voice">当前伴侣的音色</label><div class="companion-picker"><select id="settings-companion-voice" aria-label="当前伴侣的音色"><option value="default">跟随默认音色</option><option value="anon">千早爱音</option><option value="soyo">长崎素世</option><option value="sakiko_white">客服小祥</option><option value="browser">设备朗读</option></select><button type="button" class="secondary-button" id="save-companion-voice">保存音色</button></div><p class="subtle" id="companion-voice-status" role="status" aria-live="polite">选择后可以先试听，保存后用于这位伴侣的聊天回复。</p><div class="language-preference"><label for="speech-language">合成语音的语言</label><select id="speech-language"><option value="zh">普通话</option><option value="yue">粤语</option></select><p>选择回复念出来时使用的语言。</p></div><label for="volume" class="volume-label">声音大小 <output id="volume-value">70%</output></label><input id="volume" type="range" min="0" max="100" value="70"><p class="subtle" id="voice-service-note">使用这台设备的中文朗读声音。</p></div><div class="settings-actions"><span id="settings-status" aria-live="polite"></span><button class="primary-button" type="submit">保存偏好<svg class="icon"><use href="#i-check"/></svg></button></div></form>
         <div class="settings-card connection-card"><div><h2>当前体验</h2><p id="connection-copy">本地演示回复 · 设备语音 · 合成哼唱</p></div><span class="connection-tag" id="connection-tag">演示模式</span></div>
+        <div class="settings-card voice-preview"><h2>试听当前音色</h2><p id="voice-preview-note">输入一句话，使用当前语音服务合成并播放。</p><label for="voice-preview-text">试听内容</label><textarea id="voice-preview-text" maxlength="500" rows="2">你好呀，今天也想陪你聊聊天。</textarea><div class="companion-picker"><button type="button" class="primary-button" id="voice-preview"><svg class="icon"><use href="#i-volume"/></svg>试听当前音色</button><button type="button" class="secondary-button" id="voice-preview-stop" hidden>停止声音</button><span id="voice-preview-status" role="status" aria-live="polite"></span></div></div>
         <div class="data-actions"><button id="clear-history"><svg class="icon"><use href="#i-trash"/></svg>清空聊天记录</button><button id="clear-memories"><svg class="icon"><use href="#i-trash"/></svg>清空记忆瓶</button><p>聊天记录与记忆分开保存，清空其中一项不会删除另一项。</p></div>
       </section>
       <footer class="main-footer"><span>鲸伴 · 给日常一点温柔</span><span>DEMO 01 <span class="footer-dot">·</span> 本地保存</span></footer>
@@ -101,9 +111,27 @@
   </div>
 
   <div class="mini-player" id="mini-player" hidden><div class="player-art" id="player-art"><svg class="icon"><use href="#i-music"/></svg></div><div class="player-copy"><strong id="player-title">晚风与海</strong><small>原创合成哼唱示例</small></div><button class="player-toggle icon-button" id="player-toggle" aria-label="暂停歌曲"><svg class="icon"><use href="#i-pause"/></svg></button><span class="player-time" id="player-time">00:00 / 00:36</span><input class="player-progress" id="player-progress" type="range" min="0" max="36" value="0" step="0.1" aria-label="歌曲进度"><button class="icon-button" id="player-close" aria-label="停止歌曲"><svg class="icon"><use href="#i-close"/></svg></button></div>
-  <dialog id="memory-dialog"><form id="memory-form"><div class="dialog-header"><span class="eyebrow">A MEMORY TO KEEP</span><button type="button" class="icon-button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="memory-dialog-title">留下一件小事</h2><p>比如喜欢的音乐，或是希望我怎样称呼你。</p><input type="hidden" id="memory-id"><label for="memory-category">放进哪一类</label><select id="memory-category"><option>小偏好</option><option>关于我</option><option>称呼</option><option>值得记住</option></select><label for="memory-content">想让小鲸记住什么</label><textarea id="memory-content" maxlength="300" rows="4" placeholder="例如：我喜欢轻音乐，睡前想听安静一点的声音。" required></textarea><div class="dialog-footer"><span>只保存你确认的内容</span><button class="primary-button" type="submit">放进记忆瓶<svg class="icon"><use href="#i-heart"/></svg></button></div></form></dialog>
+  <dialog id="memory-dialog"><form id="memory-form"><div class="dialog-header"><span class="eyebrow">A MEMORY TO KEEP</span><button type="button" class="icon-button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="memory-dialog-title">留下一件小事</h2><p>比如喜欢的音乐，或是希望我怎样称呼你。</p><input type="hidden" id="memory-id"><label for="memory-category">放进哪一类</label><select id="memory-category"><option>小偏好</option><option>关于我</option><option>称呼</option><option>值得记住</option></select><label for="memory-content">想让伴侣记住什么</label><textarea id="memory-content" maxlength="300" rows="4" placeholder="例如：我喜欢轻音乐，睡前想听安静一点的声音。" required></textarea><div class="dialog-footer"><span>只保存你确认的内容</span><button class="primary-button" type="submit">放进记忆瓶<svg class="icon"><use href="#i-heart"/></svg></button></div></form></dialog>
   <dialog id="confirm-dialog"><h2 id="confirm-title">确认操作</h2><p id="confirm-copy"></p><div class="dialog-footer"><button class="secondary-button" id="confirm-cancel">再想想</button><button class="primary-button danger" id="confirm-accept">确认删除</button></div></dialog>
-  <dialog id="mode-dialog"><div class="dialog-header"><span class="eyebrow">ABOUT THIS DEMO</span><button class="icon-button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><h2>先和小鲸，认识一下。</h2><p id="mode-copy">当前聊天由本地规则生成，适合体验角色、会话和记忆流程。配置 AI 服务后，可以开启真实对话。</p><p>语音输入取决于浏览器或已配置的识别服务；语音回复默认使用设备声音。歌单是三首预先合成的哼唱示例。</p><p class="subtle">录音前会请求麦克风权限；语音识别可能将录音发送到浏览器的识别服务或本机配置的服务。密钥只在后端读取。</p><button class="primary-button" id="mode-got-it">好，和小鲸待一会儿<svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="companion-dialog">
+    <form id="companion-form">
+      <div class="dialog-header"><span class="eyebrow">MAKE A LITTLE CONNECTION</span><button type="button" class="icon-button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div>
+      <h2 id="companion-dialog-title">添加一位伴侣</h2><p>从一张喜欢的图开始，慢慢写下 TA 的样子。</p>
+      <input type="hidden" id="companion-id"><input type="hidden" id="companion-image-url">
+      <div class="companion-reference-field">
+        <div class="companion-reference-preview"><img id="companion-image-preview" alt="参考图预览" hidden><span class="reference-placeholder"><svg class="icon"><use href="#i-heart"/></svg><span>一张喜欢的参考图</span></span></div>
+        <div class="companion-reference-copy"><label for="companion-image">伴侣参考图</label><p>会用作主视觉和聊天头像。</p><input id="companion-image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG、JPG 或 WebP，最大 5 MB</small><button type="button" class="text-button" id="companion-image-remove" hidden>移除参考图</button><span id="companion-image-status" role="status" aria-live="polite"></span></div>
+      </div>
+      <div class="companion-form-grid"><div><label for="companion-theme">空间风格</label><select id="companion-theme"><option value="anon">爱音 · 樱花粉</option><option value="ocean">海风 · 雾霭蓝</option><option value="forest">森林 · 鼠尾草绿</option><option value="violet">月夜 · 薰衣草紫</option></select></div><div><label for="companion-voice">默认声音</label><select id="companion-voice"><option value="default">跟随默认音色</option><option value="anon">千早爱音</option><option value="soyo">长崎素世</option><option value="sakiko_white">客服小祥</option><option value="browser">设备朗读</option></select></div></div>
+      <label for="companion-name">名字</label><input id="companion-name" maxlength="24" required placeholder="例如：爱音">
+      <label for="companion-identity">身份</label><textarea id="companion-identity" rows="2" maxlength="500" required placeholder="例如：喜欢吉他、和我分享日常的乐队伙伴"></textarea>
+      <label for="companion-personality">性格</label><textarea id="companion-personality" rows="2" maxlength="500" required placeholder="例如：开朗主动，有一点害羞，关心朋友"></textarea>
+      <label for="companion-speaking-style">说话方式</label><textarea id="companion-speaking-style" rows="2" maxlength="500" required placeholder="例如：轻松口语，短句，偶尔开个小玩笑，用中文交流"></textarea>
+      <label for="companion-greeting">开场白（可选）</label><textarea id="companion-greeting" rows="2" maxlength="300" placeholder="例如：你来啦，今天有什么想和我分享的吗？"></textarea>
+      <div class="dialog-footer"><span>保存后用于这位伴侣的新回复</span><button class="primary-button" type="submit">保存伴侣<svg class="icon"><use href="#i-check"/></svg></button></div>
+    </form>
+  </dialog>
+  <dialog id="mode-dialog"><div class="dialog-header"><span class="eyebrow">ABOUT THIS DEMO</span><button class="icon-button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><h2>先和伴侣，认识一下。</h2><p id="mode-copy">当前聊天由本地规则生成，适合体验角色、会话和记忆流程。配置 AI 服务后，可以开启真实对话。</p><p>语音输入取决于浏览器或已配置的识别服务；语音回复使用你为伴侣选择的声音，可在偏好设置中试听。歌单是三首预先合成的哼唱示例。</p><p class="subtle">录音前会请求麦克风权限；语音识别可能将录音发送到浏览器的识别服务或本机配置的服务。密钥只在后端读取。</p><button class="primary-button" id="mode-got-it">好，和伴侣待一会儿<svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
   <div class="toast" id="toast" role="status" hidden></div>
   <audio id="song-audio" preload="none"></audio><audio id="reply-audio" preload="none"></audio>
 </body>

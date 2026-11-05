@@ -13,10 +13,11 @@ import (
 )
 
 type App struct {
-	store  *Store
-	config Config
-	client *http.Client
-	busy   atomic.Bool
+	store      *Store
+	config     Config
+	client     *http.Client
+	busy       atomic.Bool
+	speechBusy atomic.Bool
 }
 
 type Song struct {
@@ -46,6 +47,11 @@ func (a *App) routes() *http.ServeMux {
 	m.HandleFunc("DELETE /api/sessions", a.clearSessions)
 	m.HandleFunc("POST /api/chat", a.chat)
 	m.HandleFunc("PUT /api/settings", a.settings)
+	m.HandleFunc("POST /api/companions", a.saveCompanion)
+	m.HandleFunc("PUT /api/companions/{id}", a.saveCompanion)
+	m.HandleFunc("POST /api/companions/{id}/select", a.selectCompanion)
+	m.HandleFunc("POST /api/companion-images", a.uploadCompanionImage)
+	m.HandleFunc("GET /api/companion-images/{name}", a.companionImage)
 	m.HandleFunc("POST /api/memories", a.saveMemory)
 	m.HandleFunc("PUT /api/memories/{id}", a.saveMemory)
 	m.HandleFunc("DELETE /api/memories/{id}", a.deleteMemory)
@@ -90,14 +96,33 @@ func (a *App) publicConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"chatMode": mode, "serverASR": a.config.serverASR(), "serverTTS": a.config.serverTTS(),
-		"character": map[string]string{"name": "小鲸", "greeting": "嗨，我是小鲸。今天的海很安静，刚好可以听你慢慢说。"},
-		"songs":     songs, "songMode": "synthetic-humming", "maxRecordingSeconds": 60,
+		"ttsProvider":        a.config.ttsProvider(),
+		"anonVoiceAvailable": a.config.anonVoiceAvailable(),
+		"voices":             a.config.publicVoices(),
+		"defaultVoice":       a.config.GPTSoVITSProfile.defaultVoiceID(),
+		"templates":          []Companion{defaultCompanion(), anonCompanion()},
+		"speechLanguages":    []map[string]string{{"id": "zh", "label": "普通话"}, {"id": "yue", "label": "粤语"}},
+		"character":          map[string]string{"name": defaultCompanion().Name, "greeting": defaultCompanion().Greeting},
+		"songs":              songs, "songMode": "synthetic-humming", "maxRecordingSeconds": 60,
 	})
 }
 
 func (a *App) createSession(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		CompanionID string `json:"companionId"`
+	}
+	if r.ContentLength != 0 && !decode(w, r, &input) {
+		return
+	}
 	session := Session{ID: newID(), Title: "新的小日常", CreatedAt: now(), UpdatedAt: now(), Messages: []Message{}}
 	if err := a.store.update(func(s *State) error {
+		if input.CompanionID == "" {
+			input.CompanionID = s.ActiveCompanionID
+		}
+		if findCompanion(s, input.CompanionID) == nil {
+			return errors.New("missing companion")
+		}
+		session.CompanionID = input.CompanionID
 		if len(s.Sessions) >= 100 {
 			return errors.New("会话已达到 100 个，请先整理一些历史记录")
 		}
@@ -108,6 +133,85 @@ func (a *App) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, session)
+}
+
+func (a *App) saveCompanion(w http.ResponseWriter, r *http.Request) {
+	var submitted struct {
+		Companion
+		Theme    *string `json:"theme"`
+		ImageURL *string `json:"imageUrl"`
+		Voice    *string `json:"voice"`
+	}
+	if !decode(w, r, &submitted) {
+		return
+	}
+	input := submitted.Companion
+	input.Name = strings.TrimSpace(input.Name)
+	input.Identity = strings.TrimSpace(input.Identity)
+	input.Personality = strings.TrimSpace(input.Personality)
+	input.SpeakingStyle = strings.TrimSpace(input.SpeakingStyle)
+	input.Greeting = strings.TrimSpace(input.Greeting)
+	if input.Name == "" || utf8.RuneCountInString(input.Name) > 24 || input.Identity == "" || utf8.RuneCountInString(input.Identity) > 500 || input.Personality == "" || utf8.RuneCountInString(input.Personality) > 500 || input.SpeakingStyle == "" || utf8.RuneCountInString(input.SpeakingStyle) > 500 || utf8.RuneCountInString(input.Greeting) > 300 {
+		writeError(w, 400, "请填写伴侣名字（最多24字）、身份、性格、说话方式（各最多500字）；开场白最多300字")
+		return
+	}
+	input.ID = r.PathValue("id")
+	input.UpdatedAt = now()
+	if input.Greeting == "" {
+		input.Greeting = "嗨，我是" + input.Name + "。今天想和我聊些什么？"
+	}
+	status := http.StatusOK
+	var visualError error
+	err := a.store.update(func(s *State) error {
+		if input.ID != "" {
+			previous := findCompanion(s, input.ID)
+			if previous == nil {
+				return errors.New("未找到这位伴侣，请刷新页面")
+			}
+			visualError = a.prepareCompanionVisuals(&input, previous, submitted.Theme, submitted.ImageURL, submitted.Voice)
+			if visualError != nil {
+				return visualError
+			}
+			input.CreatedAt = previous.CreatedAt
+			*previous = input
+			return nil
+		}
+		if len(s.Companions) >= 30 {
+			return errors.New("伴侣数量已达到30位")
+		}
+		visualError = a.prepareCompanionVisuals(&input, nil, submitted.Theme, submitted.ImageURL, submitted.Voice)
+		if visualError != nil {
+			return visualError
+		}
+		input.ID, input.CreatedAt = newID(), input.UpdatedAt
+		s.Companions = append(s.Companions, input)
+		status = http.StatusCreated
+		return nil
+	})
+	if err != nil {
+		if visualError != nil {
+			writeError(w, 400, visualError.Error())
+			return
+		}
+		writeError(w, 400, "伴侣未能保存，请刷新页面或检查本地数据目录与数量限制")
+		return
+	}
+	writeJSON(w, status, input)
+}
+
+func (a *App) selectCompanion(w http.ResponseWriter, r *http.Request) {
+	err := a.store.update(func(s *State) error {
+		if findCompanion(s, r.PathValue("id")) == nil {
+			return errors.New("missing")
+		}
+		s.ActiveCompanionID = r.PathValue("id")
+		return nil
+	})
+	if err != nil {
+		writeError(w, 400, "暂时无法选择这位伴侣，请刷新页面后重试")
+		return
+	}
+	writeJSON(w, 200, map[string]string{"activeCompanionId": r.PathValue("id")})
 }
 
 func (a *App) deleteSession(w http.ResponseWriter, r *http.Request) {
@@ -142,11 +246,25 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings.Nickname = strings.TrimSpace(settings.Nickname)
+	settings.SpeechLanguage = strings.TrimSpace(settings.SpeechLanguage)
+	if settings.SpeechLanguage != "" && settings.SpeechLanguage != "zh" && settings.SpeechLanguage != "yue" {
+		writeError(w, 400, "合成语音语言请选择普通话或粤语")
+		return
+	}
 	if utf8.RuneCountInString(settings.Nickname) > 24 || settings.Volume < 0 || settings.Volume > 100 {
 		writeError(w, 400, "称呼最多 24 个字，音量应在 0 到 100 之间")
 		return
 	}
-	if err := a.store.update(func(s *State) error { s.Settings = settings; return nil }); err != nil {
+	if err := a.store.update(func(s *State) error {
+		if settings.SpeechLanguage == "" {
+			settings.SpeechLanguage = s.Settings.SpeechLanguage
+			if settings.SpeechLanguage == "" {
+				settings.SpeechLanguage = "zh"
+			}
+		}
+		s.Settings = settings
+		return nil
+	}); err != nil {
 		writeError(w, 500, "设置暂时没有保存成功")
 		return
 	}
